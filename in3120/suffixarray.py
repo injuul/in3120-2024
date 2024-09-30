@@ -35,17 +35,11 @@ class SuffixArray:
         """
         for document in self.__corpus:
             for field in fields:
-                offset = 0
                 term =  self.__normalize(document[field])
-                if term:
-                    self.__haystack.append((document.get_document_id(), term))
-                    for part in range(len(term.split(' '))):
-                        offset = len(part)+1
-                        self.__suffixes.append((len(self.__haystack) - 1, offset))
-        self.__haystack.sort(key=lambda x: x[1])
-        self.__suffixes = [(self.__haystack[i], self.__suffixes[i][1]) for i in range(len(self.__suffixes))]
-        # self.__suffixes.sort(key=lambda x: self.__haystack[x[0]][1])
-                
+                self.__haystack.append((document.get_document_id(), term))
+                for term, span in self.__tokenizer.tokens(term):
+                    self.__suffixes.append((len(self.__haystack) - 1, span[0]))
+        self.__suffixes.sort(key=lambda item: self.__haystack[item[0]][1][item[1]:])        
              
 
     def __normalize(self, buffer: str) -> str:
@@ -53,9 +47,11 @@ class SuffixArray:
         Produces a normalized version of the given string. Both queries and documents need to be
         identically processed for lookups to succeed.
         """
-        tokens = self.__tokenizer.strings(self.__normalizer.canonicalize(buffer))
-        token = (self.__normalizer.normalize(t) for t in tokens)
-        return " ".join(token)
+        lst = []
+        for token, span in self.__tokenizer.tokens(self.__normalizer.canonicalize(buffer)):
+            lst.append((self.__normalizer.normalize(token), span))
+        return self.__tokenizer.join(lst)
+        
 
     def __binary_search(self, needle: str) -> int:
         """
@@ -67,26 +63,8 @@ class SuffixArray:
         prior to Python 3.10 due to how we represent the suffixes via (index, offset) tuples. Version 3.10
         added support for specifying a key.
         """
-        # return bisect_left(self.__suffixes, needle)
-        
-        haystack_index = bisect_left(self.__haystack, needle, key=lambda x: x[1])
-        return haystack_index
-
-        # if index == len(self.__suffixes) or self.__suffixes[index][1] != needle[1]:
-        #     self.__suffixes.insert(index, needle)
-        
-        
-        # low = 0
-        # high = len(self.__suffixes)
-        # while low < high:
-        #     mid = (low + high) // 2
-        #     if self.__haystack[self.__suffixes[mid][0] ][1].startswith(needle):
-        #         return mid
-        #     elif self.__haystack[self.__suffixes[mid][0]][1] < needle:
-        #         low = mid + 1
-        #     else:
-        #         high = mid
-        # return 
+        return bisect_left(self.__suffixes, needle, key=lambda item: self.__haystack[item[0]][1][item[1]:])
+       
         
     def evaluate(self, query: str, options: dict) -> Iterator[Dict[str, Any]]:
         """
@@ -107,20 +85,15 @@ class SuffixArray:
         query = self.__normalize(query)
         if not query:
             return
-        # print('querry',query)
         haystrt = self.__binary_search(query)
-        # print('haystrt',haystrt)
         hayend = self.__binary_search(query+chr(sys.maxunicode))
-        hayrange = range(haystrt, hayend+1)
-        # print('hayrange',hayrange)
-        # for i in hayrange:
-        #     print(i)
-        docids = [self.__haystack[i][0] for i in hayrange]
-        print('docids',docids)
-        # print('documents',self.__corpus.get_document(docids[0]))
+        if hayend == -1:
+            return
+        hayrange = range(haystrt, hayend)
+        indexes = [self.__suffixes[i][0] for i in hayrange]
+        docids = [self.__haystack[i][0] for i in indexes]
         max_count = options.get("hit_count", 5)
         for docid, count in Counter(docids).most_common(max_count):
-            # print({"score": count, "document": self.__corpus.get_document(docid)})
             yield {"score": count, "document": self.__corpus.get_document(docid)}
             
 

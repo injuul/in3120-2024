@@ -2,6 +2,7 @@
 # pylint: disable=line-too-long
 # pylint: disable=too-few-public-methods
 
+import re
 from typing import Iterator, Dict, Any, List, Tuple
 from .normalizer import Normalizer
 from .tokenizer import Tokenizer
@@ -45,15 +46,32 @@ class StringFinder:
         In a serious application we'd add more lookup/evaluation features, e.g., support for prefix matching,
         support for leftmost-longest matching (instead of reporting all matches), and more.
         """
-        buffer = self.__normalizer.canonicalize(buffer)
-        tokens = self.__tokenizer.strings(buffer)
-        tokens = (self.__normalizer.normalize(t) for t in tokens)
-        trie = self.__trie
-        for token in tokens: 
-            trie.__getitem__(token)
-        
-        for string in trie.__iter__():
-            yield {"match": buffer, "surface": string, "span": (0, len(string))}
+        tokenlst = []
+        span = self.__tokenizer.spans(buffer)
+        newbuffer = self.__normalizer.canonicalize(buffer)
+        for token, _ in self.__tokenizer.tokens(newbuffer):
+            tokenlst.append((self.__normalizer.normalize(token), _))
+        tokens = self.__tokenizer.join(tokenlst)
+    
+        root = self.__trie
+        lst = []
+
+        for term, _ in self.__tokenizer.tokens(tokens):
+            span0 =  next(span)
+            if root.__contains__(term):
+                endnode = root.__getitem__(term)  
+                for tail in endnode.__iter__():      
+                    if tail is not None:
+                        #calculates the length to get the whole term
+                        length = newbuffer[span0[0]:span0[1]+len(tail)].count(' ')-re.sub(' +', ' ', newbuffer[span0[0]:span0[1]+len(tail)]).count(' ')
+                        lst.extend([(term+tail,re.sub(' +', ' ', newbuffer[span0[0]:span0[1]+len(tail)+length]), (span0[0], span0[1]+len(tail)+length))])
+                    else:
+                        lst.extend([(term, buffer[span0[0]:span0[1]], span0)])
+
+        for match_str, surface, span in lst:
+            if type(match_str) == str:
+                print({'match': match_str, 'surface': surface, 'span': span})
+                yield {"match": match_str, "surface": surface, "span": span, "meta": root.__getitem__(match_str).get_meta()}
         
 
         
