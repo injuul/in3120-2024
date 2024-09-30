@@ -2,7 +2,7 @@
 # pylint: disable=line-too-long
 
 from typing import Iterator, Iterable, Dict, Any
-import faiss
+# import faiss
 import spacy
 import numpy as np
 from .corpus import Corpus

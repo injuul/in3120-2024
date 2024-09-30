@@ -2,7 +2,7 @@
 
 from typing import Iterator
 from .posting import Posting
-
+import dis
 
 class PostingsMerger:
     """
@@ -34,8 +34,34 @@ class PostingsMerger:
         The posting lists are assumed sorted in increasing order according
         to the document identifiers.
         """
-        raise NotImplementedError("You need to implement this as part of the obligatory assignment.")
-
+        try:
+            b = next(iter2)
+        except:
+            return
+        try:
+            a = next(iter1)
+        except:
+            return
+        while True:
+            if a.document_id == b.document_id:
+                a.term_frequency += b.term_frequency
+                yield a
+                try:
+                    a,b = next(iter1), next(iter2)
+                except:
+                    break
+            elif a.document_id < b.document_id:
+                try:
+                    a = next(iter1)
+                except:
+                    break
+            else:
+                try:
+                    b = next(iter2)
+                except:
+                    break
+        
+        
     @staticmethod
     def union(iter1: Iterator[Posting], iter2: Iterator[Posting]) -> Iterator[Posting]:
         """
@@ -51,7 +77,55 @@ class PostingsMerger:
         The posting lists are assumed sorted in increasing order according
         to the document identifiers.
         """
-        raise NotImplementedError("You need to implement this as part of the obligatory assignment.")
+        try:
+            try:
+                b = next(iter2)
+            except:
+                yield from iter1
+                return
+            try:
+                a = next(iter1)
+            except:
+                yield b
+                yield from iter2
+                return
+        except:
+            return
+        
+        while True:
+            if a.document_id < b.document_id:
+                yield a
+                try:
+                    a = next(iter1)
+                except:
+                    yield b
+                    yield from iter2
+                    return
+            elif a.document_id > b.document_id:
+                yield b
+                try:
+                    b = next(iter2)
+                except:
+                    yield a
+                    yield from iter1
+                    return
+            else:
+                a.term_frequency += b.term_frequency
+                yield a
+                try:
+                    try:
+                        b = next(iter2)
+                    except:
+                        yield from iter1
+                        return
+                    try:
+                        a = next(iter1)
+                    except:
+                        yield b
+                        yield from iter2
+                        return
+                except:
+                    return
 
     @staticmethod
     def difference(iter1: Iterator[Posting], iter2: Iterator[Posting]) -> Iterator[Posting]:
@@ -68,4 +142,25 @@ class PostingsMerger:
         The posting lists are assumed sorted in increasing order according
         to the document identifiers.
         """
-        raise NotImplementedError("You need to implement this as part of the obligatory assignment.")
+        
+        try:
+            b = next(iter2)
+        except:
+            yield from iter1
+            return
+        for a in iter1:
+            while a.document_id > b.document_id:
+                try:
+                    b = next(iter2)
+                except:
+                    if a.document_id > b.document_id:
+                        yield a
+                    yield from iter1
+                    return
+            if a.document_id == b.document_id:
+                b = next(iter2)
+                continue
+            else:
+                yield a
+            
+  
