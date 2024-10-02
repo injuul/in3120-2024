@@ -47,37 +47,36 @@ class StringFinder:
         support for leftmost-longest matching (instead of reporting all matches), and more.
         """
         tokenlst = []
-        span = self.__tokenizer.spans(buffer)
+        # span = self.__tokenizer.spans(buffer)
         newbuffer = self.__normalizer.canonicalize(buffer)
-        for token, _ in self.__tokenizer.tokens(newbuffer):
-            tokenlst.append((self.__normalizer.normalize(token), _))
+        for token, span in self.__tokenizer.tokens(newbuffer):
+            tokenlst.append((self.__normalizer.normalize(token), span))
         root = self.__trie
-        lst = []
-
-        for term, _ in self.__tokenizer.tokens(tokens):
-            span0 = next(span)
-            
-            con = root.consume(term)
-            if con is not None:
-                for tail in con.__iter__():
-                    if len(tail):
-                        if tail.strip() in [tokenend for tokenend,_ in self.__tokenizer.tokens(tokens)]:
-                            length = newbuffer[span0[0]:span0[1]+len(tail)].count(' ')-re.sub(' +', ' ', newbuffer[span0[0]:span0[1]+len(tail)]).count(' ')
-                            lst.extend([(term+tail,re.sub(' +', ' ', newbuffer[span0[0]:span0[1]+len(tail)+length]), (span0[0], span0[1]+len(tail)+length))])
-                    else:
-                        lst.extend([(term, buffer[span0[0]:span0[1]], span0)])
-            # if root.__contains__(term):
-            #     endnode = root.__getitem__(term)  
-            #     for tail in endnode.__iter__():      
-            #         if len(tail):
-            #             if tail.strip() in [tokenend for tokenend,_ in self.__tokenizer.tokens(tokens)]: #checks if the new term ends on a token
-            #                 #calculates the length to get the whole term
-            #                 length = newbuffer[span0[0]:span0[1]+len(tail)].count(' ')-re.sub(' +', ' ', newbuffer[span0[0]:span0[1]+len(tail)]).count(' ')
-            #                 lst.extend([(term+tail,re.sub(' +', ' ', newbuffer[span0[0]:span0[1]+len(tail)+length]), (span0[0], span0[1]+len(tail)+length))])
-            #         else:
-            #             lst.extend([(term, buffer[span0[0]:span0[1]], span0)])
-        for match_str, surface, span in lst:
-            yield {"match": match_str, "surface": surface, "span": span, "meta": root.__getitem__(match_str).get_meta()}
+        matches = []
+        active = []
+        for term, span in tokenlst:
+            consumed = root.consume(term)
+            active2 = []
+                
+            for active_trie, active_span, path in active:
+                consumed2 = active_trie.consume(term)
+                if consumed2 is None:
+                    consumed2 = active_trie.consume(' '+term)
+                    path += ' '
+                if consumed2 is not None:
+                    if consumed2.is_final():
+                        matches.extend([(path+term, (active_span[0], span[1]))])
+                    active2.append((consumed2, (active_span[0], span[1]), path+term))
+                # active2.append((consumed, (active_span[0], span[1]), path+term))#hereee
+            if consumed is not None:
+                if consumed.is_final():        
+                    matches.extend([(term, span)])
+                active2.append((consumed, span, term))
+            active = active2
+                
+                
+        for match_str, span in matches:
+            yield {"match": match_str, "surface": re.sub(r' +', ' ', buffer[span[0]:span[1]]), "span": span, "meta": root.consume(match_str).get_meta()}
         
 
         
