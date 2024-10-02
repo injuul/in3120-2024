@@ -51,27 +51,33 @@ class StringFinder:
         newbuffer = self.__normalizer.canonicalize(buffer)
         for token, _ in self.__tokenizer.tokens(newbuffer):
             tokenlst.append((self.__normalizer.normalize(token), _))
-        tokens = self.__tokenizer.join(tokenlst)
-    
         root = self.__trie
         lst = []
 
         for term, _ in self.__tokenizer.tokens(tokens):
-            span0 =  next(span)
-            if root.__contains__(term):
-                endnode = root.__getitem__(term)  
-                for tail in endnode.__iter__():      
-                    if tail is not None:
-                        #calculates the length to get the whole term
-                        length = newbuffer[span0[0]:span0[1]+len(tail)].count(' ')-re.sub(' +', ' ', newbuffer[span0[0]:span0[1]+len(tail)]).count(' ')
-                        lst.extend([(term+tail,re.sub(' +', ' ', newbuffer[span0[0]:span0[1]+len(tail)+length]), (span0[0], span0[1]+len(tail)+length))])
+            span0 = next(span)
+            
+            con = root.consume(term)
+            if con is not None:
+                for tail in con.__iter__():
+                    if len(tail):
+                        if tail.strip() in [tokenend for tokenend,_ in self.__tokenizer.tokens(tokens)]:
+                            length = newbuffer[span0[0]:span0[1]+len(tail)].count(' ')-re.sub(' +', ' ', newbuffer[span0[0]:span0[1]+len(tail)]).count(' ')
+                            lst.extend([(term+tail,re.sub(' +', ' ', newbuffer[span0[0]:span0[1]+len(tail)+length]), (span0[0], span0[1]+len(tail)+length))])
                     else:
                         lst.extend([(term, buffer[span0[0]:span0[1]], span0)])
-
+            # if root.__contains__(term):
+            #     endnode = root.__getitem__(term)  
+            #     for tail in endnode.__iter__():      
+            #         if len(tail):
+            #             if tail.strip() in [tokenend for tokenend,_ in self.__tokenizer.tokens(tokens)]: #checks if the new term ends on a token
+            #                 #calculates the length to get the whole term
+            #                 length = newbuffer[span0[0]:span0[1]+len(tail)].count(' ')-re.sub(' +', ' ', newbuffer[span0[0]:span0[1]+len(tail)]).count(' ')
+            #                 lst.extend([(term+tail,re.sub(' +', ' ', newbuffer[span0[0]:span0[1]+len(tail)+length]), (span0[0], span0[1]+len(tail)+length))])
+            #         else:
+            #             lst.extend([(term, buffer[span0[0]:span0[1]], span0)])
         for match_str, surface, span in lst:
-            if type(match_str) == str:
-                print({'match': match_str, 'surface': surface, 'span': span})
-                yield {"match": match_str, "surface": surface, "span": span, "meta": root.__getitem__(match_str).get_meta()}
+            yield {"match": match_str, "surface": surface, "span": span, "meta": root.__getitem__(match_str).get_meta()}
         
 
         
