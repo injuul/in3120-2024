@@ -47,17 +47,17 @@ class StringFinder:
         support for leftmost-longest matching (instead of reporting all matches), and more.
         """
         tokenlst = []
-        # span = self.__tokenizer.spans(buffer)
         newbuffer = self.__normalizer.canonicalize(buffer)
         for token, span in self.__tokenizer.tokens(newbuffer):
             tokenlst.append((self.__normalizer.normalize(token), span))
         root = self.__trie
         matches = []
         active = []
+        
         for term, span in tokenlst:
             consumed = root.consume(term)
             active2 = []
-                
+            #check active states    
             for active_trie, active_span, path in active:
                 consumed2 = active_trie.consume(term)
                 if consumed2 is None:
@@ -67,13 +67,12 @@ class StringFinder:
                     if consumed2.is_final():
                         matches.extend([(path+term, (active_span[0], span[1]))])
                     active2.append((consumed2, (active_span[0], span[1]), path+term))
-                # active2.append((consumed, (active_span[0], span[1]), path+term))#hereee
+            #add current term
             if consumed is not None:
                 if consumed.is_final():        
                     matches.extend([(term, span)])
                 active2.append((consumed, span, term))
-            active = active2
-                
+            active = active2              
                 
         for match_str, span in matches:
             yield {"match": match_str, "surface": re.sub(r' +', ' ', buffer[span[0]:span[1]]), "span": span, "meta": root.consume(match_str).get_meta()}
