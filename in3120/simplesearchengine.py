@@ -46,39 +46,70 @@ class SimpleSearchEngine:
         N is inferred from the query via the "match_threshold" (float) option, and the maximum number of documents
         to return to the client is controlled via the "hit_count" (int) option.
         """
-        match_threshold = options.get("match_threshold")
-        hit_count = options.get("hit_count")
+        T = options.get("match_threshold", 0.7)
+        hit_count = options.get("hit_count", 10)
 
         # Split the query into terms, and compute the number of terms that must match
         query_terms = [term for term in self.__inverted_index.get_terms(query)]
-        match_count = int(len(query_terms) * match_threshold)
+        match_count = int(len(query_terms) * T)
 
         # Compute the document scores for the query
         sieve = Sieve(hit_count)
-        iterators = []
+        iterators = {}
+        postings = {}
+        multiplicity = Counter(query_terms)
         for term in query_terms:
             print(term)
-            iterators.append(self.__inverted_index.get_postings_iterator(term)) # iterator : posting
+            iterators[term] = self.__inverted_index.get_postings_iterator(term) # iterator : posting
+            
+            posting = next(iterators[term], None)
+            if posting is not None:
+                postings[term] = posting
+            else:
+                iterators.pop(term)
+                
+            
         
         
-        postings = [next(iterator, None) for iterator in iterators]
-        while None in postings:
-            postings.remove(None)
         
-        while len(postings) >= match_count:
-            most_common = Counter(posting.document_id for posting in postings).most_common(1)[0]
-            print('\n\nheree,',most_common)
-            if most_common == match_count:
-                ranker.reset(most_common.document_id)
-                for query in query_terms:
-                    ranker.update(term, len(query_terms), most_common)
-                sieve.sift(ranker.evaluate(), most_common)
-                for _ in range(match_count):
-                    index = postings.index(most_common)
-                    postings[index] = next(iterators[index], None)
-                    if postings[index] is None:
-                        postings.remove(None)
-                continue
+        while len(iterators.keys()) >= match_count:
+            min_tuple = min(postings.items(), key=lambda x: x[1].document_id)
+            min_posting = min_tuple[1]
+            all_min_postings = [posting for posting in postings.values() if posting.document_id == min_posting.document_id]
+            # count = sum(1 for item in posting.document_id for posting in postings.values() if item == min_posting.document_id)
+            count = len(all_min_postings)
+            if count == match_count:
+                ranker.reset(min_posting.document_id)
+                for term in query_terms:
+                    ranker.update(term, multiplicity[term], min_posting)
+                sieve.sift(ranker.evaluate(), min_posting.document_id)
+            
+            
+            
+            for _  in range(count):
+                temp = next(iterators[min_tuple[0]], None)
+                if temp is None:
+                    iterators.pop(min_tuple[0])
+                else:
+                    iterators[min_tuple[0]] = temp
+            
+            #remove None
+            # for key in list(iterators.keys()):
+            
+            
+            # most_common = Counter(posting.document_id for posting in postings).most_common(1)[0]
+            # print('\n\nheree,',most_common)
+            # if most_common == match_count:
+            #     ranker.reset(most_common.document_id)
+            #     for query in query_terms:
+            #         ranker.update(term, len(query_terms), most_common)
+            #     sieve.sift(ranker.evaluate(), most_common)
+            #     for _ in range(match_count):
+            #         index = postings.index(most_common)
+            #         postings[index] = next(iterators[index], None)
+            #         if postings[index] is None:
+            #             postings.remove(None)
+            #     continue
             # if len(set(posting.document_id for posting in postings)) == len(query_terms)-match_count:
             #     counter = Counter(posting.document_id for posting in postings)
             #     common = counter.most_common(1)[0]  
@@ -91,12 +122,12 @@ class SimpleSearchEngine:
             #         postings[index] = next(iterators[index], None)
             #         if postings[index] is None:
             #             postings.remove(None)
-                continue
-            min_posting = min(postings, key=lambda x: x.document_id)
-            min_posting_index = postings.index(min_posting)
-            postings[min_posting_index] = next(iterators[min_posting_index], None)
-            if None in postings:
-                postings.remove(None)            
+                # continue
+            # min_posting = min(postings, key=lambda x: x.document_id)
+            # min_posting_index = postings.index(min_posting)
+            # postings[min_posting_index] = next(iterators[min_posting_index], None)
+            # if None in postings:
+            #     postings.remove(None)            
         
         for score, doc in sieve.winners():
             yield {"score": score, "document": self.__corpus.get_document(doc)}
